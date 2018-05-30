@@ -1,6 +1,7 @@
 ﻿using Markdig;
 using Microsoft.Extensions.Configuration;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace StaticSitePrototype.WyamCore
@@ -14,11 +15,11 @@ namespace StaticSitePrototype.WyamCore
 
         public BlogRecipe(IConfiguration configuration)
         {
-            PostsFolder = configuration["PostsFolder"] ?? PostsFolder;
+            PostsDirectory = configuration["PostsDirectory"] ?? PostsDirectory;
         }
 
-        public string PostsFolder { get; set; } = "posts";
-        public string OutputFolder { get; set; } = "output";
+        public string PostsDirectory { get; set; } = "posts";
+        public string OutputDirectory { get; set; } = "output";
 
         public async Task InvokeAsync()
         {
@@ -26,25 +27,36 @@ namespace StaticSitePrototype.WyamCore
 
             var layout = File.ReadAllText("Layouts/_Layout.cshtml");
 
-            Directory.CreateDirectory($"output/{PostsFolder}");
-            var directory = Directory.CreateDirectory(PostsFolder);
-            var mdFiles = directory.EnumerateFiles("*.md");
-            foreach (var mdFile in mdFiles)
+            string outputPostsDirectory = Path.Combine(OutputDirectory, PostsDirectory);
+            Directory.CreateDirectory(outputPostsDirectory);
+
+            var inputDirectory = new DirectoryInfo(PostsDirectory);
+            if (!inputDirectory.Exists)
+                return;
+
+            var htmlTasks = inputDirectory
+                .EnumerateFiles("*.md")
+                .Select(f => TransformPost(f, layout, pipeline, outputPostsDirectory));
+            await Task.WhenAll(htmlTasks);
+        }
+
+        private static async Task TransformPost(FileInfo inputFile, string layout, MarkdownPipeline pipeline, string outputPostsDirectory)
+        {
+            string md;
+            using (StreamReader streamReader = inputFile.OpenText())
             {
-                using (StreamReader streamReader = mdFile.OpenText())
-                {
-                    var md = await streamReader.ReadToEndAsync();
-                    string html = Markdown.ToHtml(md, pipeline);
+                md = await streamReader.ReadToEndAsync();
+            }
 
-                    layout.Replace("@RenderBody()", layout);
+            var fileName = Path.GetFileNameWithoutExtension(inputFile.Name);
+            var outputFullName = Path.Combine(outputPostsDirectory, $"{fileName}.html");
 
-                    using (StreamWriter streamWriter = File.CreateText($"output/{PostsFolder}/{mdFile.Name}.html"))
-                    {
-                        await streamWriter.WriteAsync(html);
-                    }
-                }
+            string html = Markdown.ToHtml(md, pipeline);
+            var fullHtml = layout.Replace("@RenderBody()", html);
 
-
+            using (StreamWriter streamWriter = File.CreateText(outputFullName))
+            {
+                await streamWriter.WriteAsync(fullHtml);
             }
         }
     }
