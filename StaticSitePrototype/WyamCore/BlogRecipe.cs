@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Markdig;
+using Microsoft.Extensions.Configuration;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -21,6 +22,8 @@ namespace StaticSitePrototype.WyamCore
 
         public async Task InvokeAsync()
         {
+            var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+
             var layout = File.ReadAllText("Layouts/_Layout.cshtml");
 
             Directory.CreateDirectory($"output/{PostsFolder}");
@@ -31,7 +34,7 @@ namespace StaticSitePrototype.WyamCore
                 using (StreamReader streamReader = mdFile.OpenText())
                 {
                     var md = await streamReader.ReadToEndAsync();
-                    string html = ToHtml(md);
+                    string html = Markdown.ToHtml(md, pipeline);
 
                     layout.Replace("@RenderBody()", layout);
 
@@ -43,11 +46,6 @@ namespace StaticSitePrototype.WyamCore
 
 
             }
-        }
-
-        private string ToHtml(string md)
-        {
-            return md;  // TODO: Translate
         }
     }
 }
